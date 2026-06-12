@@ -277,6 +277,7 @@
         @php
             $statusMap = [
                 'pending' => ['label' => 'Menunggu Pembayaran', 'class' => 'badge-pro-pending'],
+                'success' => ['label' => 'Pembayaran Berhasil', 'class' => 'badge-pro-success'],
                 'confirmed' => ['label' => 'Diproses', 'class' => 'badge-pro-pending'],
                 'shipping' => ['label' => 'Dalam Pengiriman', 'class' => 'badge-pro-shipping'],
                 'delivered' => ['label' => 'Sudah Sampai', 'class' => 'badge-pro-success'],
@@ -284,7 +285,7 @@
                 'refunded' => ['label' => 'Refund', 'class' => 'badge-pro-pending'],
                 'cancelled' => ['label' => 'Dibatalkan', 'class' => 'badge-pro-pending'],
             ];
-            $curStatus = $statusMap[$trx->status] ?? ['label' => $trx->status, 'class' => ''];
+            $curStatus = $statusMap[strtolower($trx->status)] ?? ['label' => strtoupper($trx->status), 'class' => ''];
         @endphp
 
         <div class="pro-order-card animate-fade">

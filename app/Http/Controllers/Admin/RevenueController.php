@@ -17,7 +17,7 @@ class RevenueController extends Controller
         $month = $request->get('month', date('m'));
         $year = $request->get('year', date('Y'));
 
-        $query = Transaction::where('status', 'delivered');
+        $query = Transaction::whereIn('status', ['delivered', 'completed']);
 
         if ($filter == 'day') {
             $query->whereDate('created_at', $date);
@@ -40,7 +40,7 @@ class RevenueController extends Controller
         $month = $request->get('month', date('m'));
         $year = $request->get('year', date('Y'));
 
-        $query = Transaction::where('status', 'delivered');
+        $query = Transaction::whereIn('status', ['delivered', 'completed']);
 
         if ($filter == 'day') {
             $query->whereDate('created_at', $date);
@@ -67,7 +67,7 @@ class RevenueController extends Controller
         $month = $request->get('month', date('m'));
         $year = $request->get('year', date('Y'));
 
-        $query = Transaction::where('status', 'delivered');
+        $query = Transaction::whereIn('status', ['delivered', 'completed']);
 
         if ($filter == 'day') {
             $query->whereDate('created_at', $date);

@@ -123,10 +123,21 @@
                                             'shipping' => 'badge-soft-primary',
                                             'delivered' => 'badge-soft-success',
                                             'cancelled' => 'badge-soft-danger',
+                                            'completed' => 'badge-soft-success',
                                         ][$s] ?? 'badge-soft-secondary';
+
+                                        $statusLabel = [
+                                            'pending' => 'BELUM BAYAR',
+                                            'success' => 'LUNAS',
+                                            'confirmed' => 'DIPROSES',
+                                            'shipping' => 'DIKIRIM',
+                                            'delivered' => 'SUDAH SAMPAI',
+                                            'cancelled' => 'BATAL',
+                                            'completed' => 'SELESAI',
+                                        ][$s] ?? strtoupper($trx->status);
                                     @endphp
-                                    <span class="badge badge-pill {{ $statusClass }}" style="font-size: 0.65rem;">
-                                        {{ strtoupper($trx->status) }}
+                                    <span class="badge badge-pill {{ $statusClass }} px-2 py-1 font-weight-bold" style="font-size: 0.65rem; letter-spacing: 0.5px; min-width: 90px; display: inline-block; text-align: center;">
+                                        {{ $statusLabel }}
                                     </span>
                                 </div>
                             </div>

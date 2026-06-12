@@ -86,7 +86,7 @@
         <div class="card-body p-4 text-center">
             <h5 class="mb-2 opacity-80">Total Pendapatan Bersih</h5>
             <h1 class="font-weight-bold">Rp {{ number_format($totalRevenue, 0, ',', '.') }}</h1>
-            <p class="mb-0 small opacity-80">Data berdasarkan status pesanan "DELIVERED"</p>
+            <p class="mb-0 small opacity-80">Data berdasarkan status pesanan "SUDAH SAMPAI" & "SELESAI"</p>
         </div>
     </div>
 

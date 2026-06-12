@@ -62,6 +62,36 @@ class ProfileController extends Controller
         $transaction = Transaction::with(['courier', 'address', 'details.product'])
             ->where('user_id', auth()->id())
             ->findOrFail($id);
+
+        // Geocode coordinates if they are missing
+        $address = $transaction->address;
+        if ($address && (is_null($address->latitude) || is_null($address->longitude))) {
+            $query = urlencode($address->alamat_lengkap . ', ' . ($address->kota ?? 'Depok') . ', Jawa Barat, Indonesia');
+            $url = "https://nominatim.openstreetmap.org/search?format=json&q={$query}&limit=1";
+            
+            $opts = [
+                'http' => [
+                    'method' => "GET",
+                    'header' => "User-Agent: SweetBiteApp/1.0\r\n",
+                    'timeout' => 3.0 // 3 seconds timeout
+                ]
+            ];
+            $context = stream_context_create($opts);
+            try {
+                $response = file_get_contents($url, false, $context);
+                if ($response) {
+                    $data = json_decode($response, true);
+                    if (!empty($data) && isset($data[0]['lat']) && isset($data[0]['lon'])) {
+                        $address->update([
+                            'latitude' => $data[0]['lat'],
+                            'longitude' => $data[0]['lon']
+                        ]);
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ignore geocoding errors to prevent breaking the page load, fallback will be used on frontend
+            }
+        }
             
         return view('profile.track', compact('transaction'));
     }

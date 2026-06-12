@@ -254,6 +254,18 @@
     /* Map Markers */
     .leaflet-routing-container { display: none !important; }
 
+    #btnFollowCourier {
+        background: white;
+        color: var(--gojek-green);
+        border: 1px solid rgba(0, 170, 19, 0.15);
+        cursor: pointer;
+    }
+    #btnFollowCourier.active {
+        background: var(--gojek-green);
+        color: white;
+        box-shadow: 0 10px 25px rgba(0, 170, 19, 0.3);
+    }
+
     @media (max-width: 768px) {
         .order-stepper { overflow-x: auto; padding-bottom: 1rem; }
         .action-grid-track { grid-template-columns: 1fr; }
@@ -281,6 +293,11 @@
                 </div>
             </div>
             <div id="trackMap" style="height: 100%; width: 100%;"></div>
+            
+            <!-- Floating follow button -->
+            <button id="btnFollowCourier" class="btn btn-sm shadow-sm active" style="position: absolute; bottom: 25px; right: 25px; z-index: 1000; border-radius: 100px; font-weight: 800; font-size: 0.8rem; display: none; align-items: center; gap: 8px; padding: 12px 24px; transition: all 0.3s;">
+                <i class="fas fa-crosshairs"></i> <span>Ikuti Kurir</span>
+            </button>
         </div>
 
         <!-- Content Section -->
@@ -388,7 +405,7 @@
             @if($transaction->status === 'completed')
             <div class="text-center py-5 bg-light rounded-pill mb-4">
                 <div class="h4 font-weight-bold text-success mb-2"><i class="fas fa-check-circle mr-2"></i> Pesanan Telah Selesai</div>
-                <p class="text-muted mb-0">Dikonfirmasi pada {{ $transaction->customer_confirmed_at ? $transaction->customer_confirmed_at->format('d M Y, H:i') : '-' }}</p>
+                <p class="text-muted mb-0">Dikonfirmasi pada {{ $transaction->customer_confirmed_at ? \Carbon\Carbon::parse($transaction->customer_confirmed_at)->format('d M Y, H:i') : '-' }}</p>
             </div>
             @endif
         </div>
@@ -425,8 +442,13 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const storeLoc = [-6.3456, 106.7890];
-        const destLoc = [{{ $transaction->address->latitude }}, {{ $transaction->address->longitude }}];
         
+        // Safely fetch destination latitude and longitude
+        const destLat = @json($transaction->address->latitude);
+        const destLng = @json($transaction->address->longitude);
+        const destLoc = (destLat && destLng) ? [parseFloat(destLat), parseFloat(destLng)] : storeLoc;
+        
+        // Set initial view to destLoc if coordinates exist, otherwise storeLoc
         const map = L.map('trackMap', { 
             zoomControl: false,
             dragging: true 
@@ -456,20 +478,49 @@
         });
 
         let courierMarker = null;
+        let followCourier = true;
+
+        // Draw static markers
+        L.marker(storeLoc, { icon: storeIcon }).addTo(map).bindPopup('<b>SweetBite Store</b>');
+        if (destLat && destLng) {
+            L.marker(destLoc, { icon: homeIcon }).addTo(map).bindPopup('<b>Lokasi Kamu</b>');
+        }
+
+        // Draw static route line for reference
+        const staticLine = L.polyline([storeLoc, destLoc], {
+            color: '#00AA13', 
+            weight: 3, 
+            opacity: 0.6, 
+            dashArray: '5, 10'
+        }).addTo(map);
+
+        // Fit map bounds to show store and destination initially
+        const initialBounds = L.latLngBounds([storeLoc, destLoc]);
+        map.fitBounds(initialBounds, { padding: [50, 50] });
 
         function fetchLocation() {
             $.get('{{ route('profile.courier_location', $transaction->id) }}', function(data) {
                 if (data.lat && data.lng) {
-                    const newPos = [data.lat, data.lng];
+                    const newPos = [parseFloat(data.lat), parseFloat(data.lng)];
                     
                     if (!courierMarker) {
-                        courierMarker = L.marker(newPos, { icon: bikeIcon, zIndexOffset: 1000 }).addTo(map).bindPopup('<b>Kurir sedang dijalan</b>');
+                        courierMarker = L.marker(newPos, { icon: bikeIcon, zIndexOffset: 1000 })
+                            .addTo(map)
+                            .bindPopup('<b>Kurir sedang dijalan</b>');
+                        
+                        // Show the follow button now that courier is active
+                        $('#btnFollowCourier').css('display', 'flex');
+                        
+                        // First time we get the courier location, fit bounds to show everyone
+                        const bounds = L.latLngBounds([storeLoc, destLoc, newPos]);
+                        map.fitBounds(bounds, { padding: [50, 50] });
                     } else {
                         courierMarker.setLatLng(newPos);
                     }
                     
-                    // Optional: adjust view to keep courier in frame
-                    // map.panTo(newPos);
+                    if (followCourier) {
+                        map.panTo(newPos);
+                    }
                 }
 
                 // If finished, stop polling
@@ -482,11 +533,20 @@
             });
         }
 
-        L.marker(storeLoc, { icon: storeIcon }).addTo(map).bindPopup('<b>SweetBite Store</b>');
-        L.marker(destLoc, { icon: homeIcon }).addTo(map).bindPopup('<b>Lokasi Kamu</b>');
+        // Disable follow mode when user manually drags/interacts with map
+        map.on('dragstart', function() {
+            followCourier = false;
+            $('#btnFollowCourier').removeClass('active');
+        });
 
-        // Draw static route line for reference
-        const staticLine = L.polyline([storeLoc, destLoc], {color: '#eee', weight: 4, opacity: 0.5}).addTo(map);
+        // Toggle/Enable follow mode when clicking floating button
+        $('#btnFollowCourier').on('click', function() {
+            followCourier = true;
+            $(this).addClass('active');
+            if (courierMarker) {
+                map.panTo(courierMarker.getLatLng());
+            }
+        });
 
         // Start Polling every 3 seconds
         const trackingInterval = setInterval(fetchLocation, 3000);

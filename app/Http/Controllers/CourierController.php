@@ -28,6 +28,38 @@ class CourierController extends Controller
 
         $orders = $query->get();
 
+        // Auto-geocode null coordinates for active orders
+        foreach ($orders as $order) {
+            $address = $order->address;
+            if ($address && (is_null($address->latitude) || is_null($address->longitude))) {
+                $queryStr = urlencode($address->alamat_lengkap . ', ' . ($address->kota ?? 'Depok') . ', Jawa Barat, Indonesia');
+                $url = "https://nominatim.openstreetmap.org/search?format=json&q={$queryStr}&limit=1";
+                
+                $opts = [
+                    'http' => [
+                        'method' => "GET",
+                        'header' => "User-Agent: SweetBiteApp/1.0\r\n",
+                        'timeout' => 3.0
+                    ]
+                ];
+                $context = stream_context_create($opts);
+                try {
+                    $response = @file_get_contents($url, false, $context);
+                    if ($response) {
+                        $data = json_decode($response, true);
+                        if (!empty($data) && isset($data[0]['lat']) && isset($data[0]['lon'])) {
+                            $address->update([
+                                'latitude' => $data[0]['lat'],
+                                'longitude' => $data[0]['lon']
+                            ]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Ignore geocoding failures
+                }
+            }
+        }
+
         // Daily Statistics
         $deliveredOrdersToday = Transaction::with(['user', 'details.product', 'address'])
             ->where('courier_id', auth()->id())

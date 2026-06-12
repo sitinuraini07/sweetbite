@@ -276,6 +276,15 @@
                         </span>
                     @endforeach
                 </div>
+
+                <!-- Simulation Control -->
+                <button type="button" class="btn btn-outline-warning btn-block rounded-pill mt-4 py-2 font-weight-bold btn-simulate-pro" 
+                        data-order-id="{{ $o->id }}" 
+                        data-dest-lat="{{ $o->address->latitude }}" 
+                        data-dest-lng="{{ $o->address->longitude }}" 
+                        style="font-size: 0.8rem; border: 1.5px dashed #ff9800; color: #e65100; transition: all 0.3s;">
+                    <i class="fas fa-play mr-1"></i> Mulai Simulasi Perjalanan
+                </button>
             </div>
 
             <div class="task-foot">
@@ -374,7 +383,7 @@
                                     <div class="small text-muted">{{ $do->updated_at->diffForHumans() }}</div>
                                 </td>
                                 <td>
-                                    <span class="badge badge-success rounded-pill px-3 py-2" style="font-size: 0.65rem;">DONE</span>
+                                    <span class="badge badge-success rounded-pill px-3 py-2" style="font-size: 0.65rem;">SELESAI</span>
                                 </td>
                                 <td class="text-right">
                                     @if($do->proof_image)
@@ -419,18 +428,102 @@
         }
     }
 
+    let activeIntervals = {};
+    let geolocationWatchId = null;
+
     function startTracking() {
         if (navigator.geolocation) {
-            navigator.geolocation.watchPosition((pos) => {
-                const { latitude, longitude } = pos.coords;
-                $.post('/courier/location', {
-                    _token: '{{ csrf_token() }}',
-                    lat: latitude,
-                    lng: longitude
-                });
+            geolocationWatchId = navigator.geolocation.watchPosition((pos) => {
+                // Only send browser coordinates if no simulation is active
+                if (Object.keys(activeIntervals).length === 0) {
+                    const { latitude, longitude } = pos.coords;
+                    $.post('/courier/location', {
+                        _token: '{{ csrf_token() }}',
+                        lat: latitude,
+                        lng: longitude
+                    });
+                }
             }, null, { enableHighAccuracy: true });
         }
     }
+
+    // Interpolation utility function
+    function interpolate(start, end, steps) {
+        let pts = [];
+        for (let i = 0; i <= steps; i++) {
+            let t = i / steps;
+            let lat = start[0] + (end[0] - start[0]) * t;
+            let lng = start[1] + (end[1] - start[1]) * t;
+            pts.push([lat, lng]);
+        }
+        return pts;
+    }
+
+    $(document).on('click', '.btn-simulate-pro', function() {
+        const btn = $(this);
+        const orderId = btn.data('order-id');
+        let destLat = parseFloat(btn.data('dest-lat'));
+        let destLng = parseFloat(btn.data('dest-lng'));
+        
+        // SweetBite Store coordinates
+        const storeLat = -6.3456;
+        const storeLng = 106.7890;
+
+        // If destination coordinates are null/invalid, fall back to a nearby coordinate
+        if (!destLat || !destLng) {
+            destLat = -6.3429396;
+            destLng = 106.7788709;
+        }
+
+        if (activeIntervals[orderId]) {
+            // Stop active simulation
+            clearInterval(activeIntervals[orderId]);
+            delete activeIntervals[orderId];
+            btn.html('<i class="fas fa-play mr-1"></i> Mulai Simulasi Perjalanan')
+               .removeClass('btn-warning text-white')
+               .addClass('btn-outline-warning');
+            return;
+        }
+
+        // Start simulation
+        btn.html('<i class="fas fa-stop mr-1"></i> Menghentikan Simulasi (0%)')
+           .removeClass('btn-outline-warning')
+           .addClass('btn-warning text-white');
+
+        const steps = 15; // 15 steps
+        const routePoints = interpolate([storeLat, storeLng], [destLat, destLng], steps);
+        let currentStep = 0;
+
+        activeIntervals[orderId] = setInterval(() => {
+            if (currentStep > steps) {
+                clearInterval(activeIntervals[orderId]);
+                delete activeIntervals[orderId];
+                btn.html('<i class="fas fa-check mr-1"></i> Simulasi Selesai!')
+                   .removeClass('btn-warning text-white')
+                   .addClass('btn-success text-white');
+                setTimeout(() => {
+                    btn.html('<i class="fas fa-play mr-1"></i> Mulai Simulasi Perjalanan')
+                       .removeClass('btn-success text-white')
+                       .addClass('btn-outline-warning');
+                }, 3000);
+                return;
+            }
+
+            const [lat, lng] = routePoints[currentStep];
+            const percent = Math.round((currentStep / steps) * 100);
+            btn.html(`<i class="fas fa-motorcycle fa-spin mr-1"></i> Simulasi Perjalanan (${percent}%)`);
+
+            $.post('/courier/location', {
+                _token: '{{ csrf_token() }}',
+                lat: lat,
+                lng: lng
+            }, function() {
+                console.log(`Simulation step ${currentStep}/${steps} updated: ${lat}, ${lng}`);
+            });
+
+            currentStep++;
+        }, 3000); // Send update every 3 seconds (matching customer polling)
+    });
 
     document.addEventListener('DOMContentLoaded', startTracking);
 </script>
